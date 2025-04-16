@@ -5,6 +5,8 @@ app = Flask('')
 
 @app.route('/')
 def home():
+    print(f"Ping from {request.remote_addr}")
+    print(f"User-Agent: {request.headers.get('User-Agent')}")
     return "Bot is alive!"
 
 def run():
