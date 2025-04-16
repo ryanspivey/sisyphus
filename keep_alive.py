@@ -1,5 +1,7 @@
 from flask import Flask, request
 from threading import Thread
+import functools
+print = functools.partial(print, flush=True)
 
 app = Flask('')
 
