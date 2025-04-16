@@ -2,6 +2,8 @@ import discord
 import os
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+import functools
+print = functools.partial(print, flush=True)
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
