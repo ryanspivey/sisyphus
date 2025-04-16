@@ -7,7 +7,7 @@ print = functools.partial(print, flush=True)
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_IDS_RAW = os.getenv("CHANNEL_IDS")
 
 # Check that both env vars are loaded
 if not TOKEN:
@@ -15,15 +15,16 @@ if not TOKEN:
 else:
     print("✅ DISCORD_TOKEN loaded.")
 
-if not CHANNEL_ID:
-    print("❌ ERROR: CHANNEL_ID is missing.")
+if not CHANNEL_IDS_RAW:
+    print("❌ ERROR: CHANNEL_IDS is missing.")
+    CHANNEL_IDS = []
 else:
-    print(f"✅ CHANNEL_ID loaded: {CHANNEL_ID}")
-
-try:
-    CHANNEL_ID = int(CHANNEL_ID)
-except Exception as e:
-    print(f"❌ ERROR converting CHANNEL_ID to int: {e}")
+    try:
+        CHANNEL_IDS = [int(cid.strip()) for cid in CHANNEL_IDS_RAW.split(',')]
+        print(f"✅ CHANNEL_IDS loaded: {CHANNEL_IDS}")
+    except Exception as e:
+        print(f"❌ ERROR parsing CHANNEL_IDS: {e}")
+        CHANNEL_IDS = []
 
 # Enable intents
 intents = discord.Intents.default()
@@ -44,7 +45,7 @@ async def on_message(message):
         print("🔁 Skipping bot message")
         return
 
-    if message.channel.id != CHANNEL_ID:
+    if message.channel.id not in CHANNEL_IDS:
         print(f"❌ Message in untracked channel: {message.channel.id}")
         return
 
