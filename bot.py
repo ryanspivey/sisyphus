@@ -53,7 +53,15 @@ async def on_message(message):
 
     if not (has_attachment or has_link):
         print("🗑 Deleting non-link/non-attachment message")
-        await message.delete()
+        try:
+            await message.delete()
+            print("🗑 Message deleted")
+        except discord.errors.NotFound:
+            print("⚠️ Tried to delete a message that was already gone")
+        except discord.errors.Forbidden:
+            print("❌ Bot doesn't have permission to delete this message")
+        except Exception as e:
+            print(f"❌ Unexpected error deleting message: {e}")
     else:
         print("✅ Allowed message")
 
