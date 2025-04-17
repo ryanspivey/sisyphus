@@ -66,6 +66,33 @@ async def on_message(message):
     else:
         print("✅ Allowed message")
 
+async def purge_channel(channel_id: int):
+    await client.wait_until_ready()
+
+    channel = client.get_channel(channel_id)
+    if not channel:
+        print(f"❌ Channel {channel_id} not found")
+        return
+
+    print(f"🧹 Starting purge in channel {channel_id}")
+
+    try:
+        async for message in channel.history(limit=1000):  # adjust limit as needed
+            if message.author.bot:
+                continue
+
+            has_attachment = bool(message.attachments)
+            has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
+
+            if not (has_attachment or has_link):
+                try:
+                    await message.delete()
+                    print(f"🧼 Deleted message: {message.content}")
+                except Exception as e:
+                    print(f"❌ Error deleting message: {e}")
+    except Exception as e:
+        print(f"❌ Failed to purge channel {channel_id}: {e}")
+
 keep_alive()
 print("🚀 Starting bot...")
 client.run(TOKEN)
