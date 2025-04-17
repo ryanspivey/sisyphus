@@ -1,35 +1,40 @@
-# keep_alive.py
-
 from flask import Flask, request
-import asyncio
+import asyncio, threading, typing
 
 app = Flask(__name__)
+
+# will be filled in from bot.py at startup
+client_ref: typing.Optional[discord.Client] = None
+purge_fn:   typing.Optional[typing.Callable[[int], asyncio.Future]] = None
 
 @app.route('/')
 def home():
     return "Bot is alive!"
 
-@app.route('/purge/<int:channel_id>', methods=['GET'])
-def purge_text_channel(channel_id):
+@app.route('/purge/<int:channel_id>')
+def purge_text_channel(channel_id: int):
     print(f"📥 Received purge request for channel {channel_id}")
-    try:
-        from bot import client, purge_channel
-        future = asyncio.run_coroutine_threadsafe(purge_channel(channel_id), client.loop)
-        print(f"🧹 Scheduled purge task for {channel_id}: {future}")
-        return f"Purge started for channel {channel_id}", 200
-    except Exception as e:
-        print(f"❌ Exception during purge scheduling: {e}")
-        return f"❌ Internal error: {e}", 500
 
-def keep_alive():
-    from threading import Thread
+    if client_ref is None or purge_fn is None:
+        return "❌ Bot not ready", 503
 
-    def run():
-        try:
-            print("🌐 Starting Flask keep-alive server...")
-            app.run(host="0.0.0.0", port=8080)
-        except Exception as e:
-            print(f"❌ Flask server failed to start: {e}")
+    fut = asyncio.run_coroutine_threadsafe(
+        purge_fn(channel_id), client_ref.loop
+    )
+    print(f"🧹 Scheduled purge task: {fut}")
+    return f"Purge started for {channel_id}", 200
 
-    thread = Thread(target=run, daemon=True)
+
+def start_flask() -> None:
+    print("🌐 Starting Flask keep‑alive server …")
+    app.run(host="0.0.0.0", port=8080)
+
+
+def keep_alive(bot_client: discord.Client, purge_coroutine):
+    """Call this once from bot.py"""
+    global client_ref, purge_fn
+    client_ref = bot_client
+    purge_fn   = purge_coroutine
+
+    thread = threading.Thread(target=start_flask, daemon=True)
     thread.start()
