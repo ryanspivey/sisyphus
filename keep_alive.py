@@ -14,7 +14,8 @@ def home():
 
 @app.route('/purge/<int:channel_id>', methods=['GET'])
 def purge_text_channel(channel_id):
-    from bot import client, purge_channel  # import both
+    print(f"📥 Received purge request for channel {channel_id}")
+    from bot import client, purge_channel
     try:
         future = asyncio.run_coroutine_threadsafe(purge_channel(channel_id), client.loop)
         print(f"🧹 Scheduled purge task for {channel_id}: {future}")
