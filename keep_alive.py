@@ -1,3 +1,5 @@
+# keep_alive.py
+
 from flask import Flask, request
 import asyncio
 
@@ -29,6 +31,5 @@ def keep_alive():
         except Exception as e:
             print(f"❌ Flask server failed to start: {e}")
 
-    thread = Thread(target=run)
-    thread.daemon = True  # let it die with the main process
+    thread = Thread(target=run, daemon=True)
     thread.start()
