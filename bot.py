@@ -42,7 +42,6 @@ def is_message_allowed(message: discord.Message) -> bool:
 @client.event
 async def on_ready():
     print(f"✅ Logged in as {client.user} (ID: {client.user.id})")
-    await purge_channel(1358132425812611163)
 
 @client.event
 async def on_message(message):
