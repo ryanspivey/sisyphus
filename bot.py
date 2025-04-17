@@ -56,23 +56,25 @@ async def on_message(message):
         return
 
     if not is_message_allowed(message):
-    print("🗑 Deleting text-only message (no media or link)")
-    try:
-        await message.delete()
-        print("🗑 Message deleted")
+        print("🗑 Deleting text-only message (no media or link)")
+        try:
+            await message.delete()
+            print("🗑 Message deleted")
 
-        # Send a temporary help message
-        warning = await message.channel.send(
-            f"🚫 <@{message.author.id}>, text-only messages aren't allowed in this channel. Please include a link or attachment."
-        )
-        await warning.delete(delay=8)  # auto-delete after 8 seconds
+            # Send a warning message
+            warning = await message.channel.send(
+                f"🚫 <@{message.author.id}>, text-only messages aren't allowed in this channel. Please include a link or attachment."
+            )
+            await warning.delete(delay=8)
 
-    except discord.errors.NotFound:
-        print("⚠️ Tried to delete a message that was already gone")
-    except discord.errors.Forbidden:
-        print("❌ Bot doesn't have permission to delete this message or post a warning")
-    except Exception as e:
-        print(f"❌ Unexpected error deleting message: {e}")
+        except discord.errors.NotFound:
+            print("⚠️ Tried to delete a message that was already gone")
+        except discord.errors.Forbidden:
+            print("❌ Bot doesn't have permission to delete this message or post a warning")
+        except Exception as e:
+            print(f"❌ Unexpected error deleting message: {e}")
+    else:
+        print("✅ Allowed: message has link or attachment (text is okay)")
 
 # Used for purge endpoint
 async def purge_channel(channel_id: int):
