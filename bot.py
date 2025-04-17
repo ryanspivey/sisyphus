@@ -103,6 +103,6 @@ async def purge_channel(channel_id: int):
     except Exception as e:
         print(f"❌ Failed to purge channel {channel_id}: {e}")
 
-keep_alive()
+keep_alive(client, purge_channel)
 print("🚀 Starting bot...")
 client.run(TOKEN)
