@@ -14,9 +14,13 @@ def home():
 
 @app.route('/purge/<int:channel_id>', methods=['GET'])
 def purge_text_channel(channel_id):
-    loop = asyncio.get_event_loop()
-    loop.create_task(purge_channel(channel_id))
-    return f"🧹 Purge started for channel {channel_id}", 200
+    from bot import client  # import here to avoid circular import at top
+    try:
+        asyncio.run_coroutine_threadsafe(purge_channel(channel_id), client.loop)
+        return f"🧹 Purge started for channel {channel_id}", 200
+    except Exception as e:
+        print(f"❌ Error scheduling purge: {e}")
+        return f"❌ Failed to purge channel: {e}", 500
 
 def run():
     app.run(host='0.0.0.0', port=8080)
