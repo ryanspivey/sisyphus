@@ -78,19 +78,28 @@ async def purge_channel(channel_id: int):
         print(f"❌ Channel {channel_id} not found")
         return
 
-    print(f"🧹 Starting purge in channel {channel_id}")
+    print(f"🧹 Starting purge in channel {channel_id} ({channel.name})")
+
+    deleted_count = 0
+    skipped_count = 0
 
     try:
-        async for message in channel.history(limit=1000):  # adjust limit as needed
+        async for message in channel.history(limit=1000):  # adjust as needed
             if message.author.bot:
+                skipped_count += 1
                 continue
 
             if not is_message_allowed(message):
                 try:
                     await message.delete()
-                    print(f"🧼 Deleted message: {message.content}")
+                    print(f"🧼 Deleted: [{message.author.display_name}] {message.content}")
+                    deleted_count += 1
                 except Exception as e:
-                    print(f"❌ Error deleting message: {e}")
+                    print(f"❌ Error deleting message from {message.author.display_name}: {e}")
+            else:
+                skipped_count += 1
+
+        print(f"✅ Purge complete: {deleted_count} messages deleted, {skipped_count} skipped.")
     except Exception as e:
         print(f"❌ Failed to purge channel {channel_id}: {e}")
 
