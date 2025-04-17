@@ -33,6 +33,12 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 
+# 🔍 Shared logic for message validation
+def is_message_allowed(message: discord.Message) -> bool:
+    has_attachment = bool(message.attachments)
+    has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
+    return has_attachment or has_link
+
 @client.event
 async def on_ready():
     print(f"✅ Logged in as {client.user} (ID: {client.user.id})")
@@ -49,11 +55,7 @@ async def on_message(message):
         print(f"❌ Message in untracked channel: {message.channel.id}")
         return
 
-    has_attachment = bool(message.attachments)
-    has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
-
-    if not (has_attachment or has_link):
-        # Message is just text with no media or links — delete it
+    if not is_message_allowed(message):
         print("🗑 Deleting text-only message (no media or link)")
         try:
             await message.delete()
@@ -67,6 +69,7 @@ async def on_message(message):
     else:
         print("✅ Allowed: message has link or attachment (text is okay)")
 
+# Used for purge endpoint
 async def purge_channel(channel_id: int):
     await client.wait_until_ready()
 
@@ -82,10 +85,7 @@ async def purge_channel(channel_id: int):
             if message.author.bot:
                 continue
 
-            has_attachment = bool(message.attachments)
-            has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
-
-            if not (has_attachment or has_link):
+            if not is_message_allowed(message):
                 try:
                     await message.delete()
                     print(f"🧼 Deleted message: {message.content}")
