@@ -53,7 +53,8 @@ async def on_message(message):
     has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
 
     if not (has_attachment or has_link):
-        print("🗑 Deleting non-link/non-attachment message")
+        # Message is just text with no media or links — delete it
+        print("🗑 Deleting text-only message (no media or link)")
         try:
             await message.delete()
             print("🗑 Message deleted")
@@ -64,7 +65,7 @@ async def on_message(message):
         except Exception as e:
             print(f"❌ Unexpected error deleting message: {e}")
     else:
-        print("✅ Allowed message")
+        print("✅ Allowed: message has link or attachment (text is okay)")
 
 async def purge_channel(channel_id: int):
     await client.wait_until_ready()
