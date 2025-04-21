@@ -1,3 +1,4 @@
-discord.py
+discord.py>=2.3.2
 Flask
 python-dotenv
+wavelink>=2.5.1
