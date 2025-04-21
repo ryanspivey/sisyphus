@@ -68,7 +68,7 @@ async def play(interaction: discord.Interaction, search: str):
         return
 
     # Step 2: Get or connect Lavalink node
-    node: wavelink.Node = wavelink.NodePool.get_node()
+    node: wavelink.Node = wavelink.Pool.get_node()
 
     # Step 3: Get or create player for this guild
     player: wavelink.Player = node.get_player(interaction.guild.id)
