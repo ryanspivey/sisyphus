@@ -71,9 +71,11 @@ async def play(interaction: discord.Interaction, search: str):
     node: wavelink.Node = wavelink.Pool.get_node()
 
     # Step 3: Get or create player for this guild
-    player: wavelink.Player = node.get_player(interaction.guild.id)
+    player: wavelink.Player = bot.voice_clients.get(interaction.guild.id)  # check if already connected
+
     if not player:
-        player = await node.connect(interaction.guild.id)
+        channel = interaction.user.voice.channel
+        player = await channel.connect(cls=wavelink.Player)
 
     # Step 4: Connect bot to the user's voice channel if not already connected
     if not player.is_connected():
