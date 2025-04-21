@@ -1,6 +1,8 @@
 from flask import Flask, request
 import asyncio, threading, typing
 import discord
+import functools
+print = functools.partial(print, flush=True)
 
 app = Flask(__name__)
 
