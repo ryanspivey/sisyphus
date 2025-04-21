@@ -9,6 +9,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import wavelink
+import functools
+print = functools.partial(print, flush=True)
 
 # === Load environment variables ===
 load_dotenv()
@@ -50,8 +52,7 @@ async def on_ready():
     print(f"LAVALINK_PASS: {os.getenv('LAVALINK_PASS')}")
     print(f"LAVALINK_IP: {os.getenv('LAVALINK_IP')}")
 
-    node = wavelink.Node(
-    uri=f'http://{os.getenv("LAVALINK_IP")}:2333', password=os.getenv("LAVALINK_PASS"))
+    node = wavelink.Node(uri=f'http://{os.getenv("LAVALINK_IP")}:2333', password=os.getenv("LAVALINK_PASS"))
     await wavelink.Pool.connect(client=bot, nodes=[node])
     print("🎶 Lavalink node connected")
 
