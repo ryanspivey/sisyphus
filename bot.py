@@ -47,6 +47,9 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Failed to sync commands: {e}")
 
+    print(f"LAVALINK_PASS: {os.getenv('LAVALINK_PASS')}")
+    print(f"LAVALINK_IP: {os.getenv('LAVALINK_IP')}")
+
     node = wavelink.Node(
     uri=f'http://{os.getenv("LAVALINK_IP")}:2333', password=os.getenv("LAVALINK_PASS"))
     await wavelink.Pool.connect(client=bot, nodes=[node])
