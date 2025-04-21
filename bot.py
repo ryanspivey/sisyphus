@@ -71,18 +71,18 @@ async def play(interaction: discord.Interaction, search: str):
     # Step 2: Get Lavalink node
     node: wavelink.Node = wavelink.Pool.get_node()
 
-    # Step 3: Check if bot is already connected to a VC in this guild
+    # Step 3: Check for existing VC connection
     existing_vc = get(bot.voice_clients, guild=interaction.guild)
 
-    # Step 4: Connect to VC if not already connected
+    # Step 4: Connect if not already
     if not existing_vc:
         channel = interaction.user.voice.channel
         player: wavelink.Player = await channel.connect(cls=wavelink.Player)
     else:
         player: wavelink.Player = existing_vc
 
-    # Step 5: Search and play track
-    track = await wavelink.YouTubeTrack.search(search, return_first=True)
+    # Step 5: Search and play
+    track = await wavelink.Playable.search(search, return_first=True)
     if not track:
         await interaction.followup.send("❌ No results found.")
         return
