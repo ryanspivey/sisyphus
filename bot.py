@@ -82,10 +82,12 @@ async def play(interaction: discord.Interaction, search: str):
         player: wavelink.Player = existing_vc
 
     # Step 5: Search and play
-    track = await wavelink.Playable.search(search, return_first=True)
-    if not track:
+    tracks = await wavelink.Playable.search(search)
+    if not tracks:
         await interaction.followup.send("❌ No results found.")
         return
+
+    track = tracks[0]
 
     await player.play(track)
     await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
