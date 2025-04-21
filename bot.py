@@ -8,6 +8,7 @@ from flask import Flask, request
 import discord
 from discord.ext import commands
 from discord import app_commands
+from discord.utils import get
 import wavelink
 import functools
 print = functools.partial(print, flush=True)
@@ -67,28 +68,27 @@ async def play(interaction: discord.Interaction, search: str):
         await interaction.followup.send("❌ You must be in a voice channel to use this command.")
         return
 
-    # Step 2: Get or connect Lavalink node
+    # Step 2: Get Lavalink node
     node: wavelink.Node = wavelink.Pool.get_node()
 
-    # Step 3: Get or create player for this guild
-    player: wavelink.Player = bot.voice_clients.get(interaction.guild.id)  # check if already connected
+    # Step 3: Check if bot is already connected to a VC in this guild
+    existing_vc = get(bot.voice_clients, guild=interaction.guild)
 
-    if not player:
+    # Step 4: Connect to VC if not already connected
+    if not existing_vc:
         channel = interaction.user.voice.channel
-        player = await channel.connect(cls=wavelink.Player)
-
-    # Step 4: Connect bot to the user's voice channel if not already connected
-    if not player.is_connected():
-        await player.connect(interaction.user.voice.channel.id)
+        player: wavelink.Player = await channel.connect(cls=wavelink.Player)
+    else:
+        player: wavelink.Player = existing_vc
 
     # Step 5: Search and play track
-    tracks = await wavelink.YouTubeTrack.search(search, return_first=True)
-    if not tracks:
+    track = await wavelink.YouTubeTrack.search(search, return_first=True)
+    if not track:
         await interaction.followup.send("❌ No results found.")
         return
 
-    await player.play(tracks)
-    await interaction.followup.send(f"▶️ Now playing: **{tracks.title}**")
+    await player.play(track)
+    await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
 
 # === Message Filter ===
 def is_message_allowed(message: discord.Message) -> bool:
