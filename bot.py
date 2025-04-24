@@ -11,6 +11,7 @@ from discord import app_commands
 from discord.utils import get
 import wavelink
 import functools
+import time
 print = functools.partial(print, flush=True)
 
 # === Load environment variables ===
@@ -58,42 +59,33 @@ async def on_ready():
     print("🎶 Lavalink node connected")
 
 # === Slash Command: /play ===
+def log(*msg):
+    # helpful prefix: container-id, iso-timestamp
+    print(f"[{os.getenv('RENDER_INSTANCE_ID','local')} "
+          f"{time.strftime('%H:%M:%S')}]",
+          *msg)
+
 @bot.tree.command(name="play", description="Play a song in your voice channel")
 @app_commands.describe(search="The song name or URL to play")
 async def play(interaction: discord.Interaction, search: str):
+    iid = interaction.id  # snowflake of this slash-command
+    log(f"received /play {iid}")
+
     try:
         await interaction.response.defer(thinking=True)
+        log(f"deferred {iid}")
     except discord.NotFound:
-        return   # bail out, another container already answered
-
-    # Step 1: Make sure the user is in a voice channel
-    if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.followup.send("❌ You must be in a voice channel to use this command.")
+        log(f"duplicate-container lost the race for {iid}; exiting")
         return
 
-    # Step 2: Get Lavalink node
-    node: wavelink.Node = wavelink.Pool.get_node()
-
-    # Step 3: Check for existing VC connection
-    existing_vc = get(bot.voice_clients, guild=interaction.guild)
-
-    # Step 4: Connect if not already
-    if not existing_vc:
-        channel = interaction.user.voice.channel
-        player: wavelink.Player = await channel.connect(cls=wavelink.Player)
-    else:
-        player: wavelink.Player = existing_vc
-
-    # Step 5: Search and play
-    tracks = await wavelink.Playable.search(search)
-    if not tracks:
-        await interaction.followup.send("❌ No results found.")
-        return
-
-    track = tracks[0]
-
-    await player.play(track)
-    await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
+    try:
+        # … rest of your logic, unchanged …
+        # sprinkle a few log() calls if you like
+        await interaction.followup.send(f"▶️ Now playing **{track.title}**")
+        log(f"followup sent {iid}")
+    except Exception as e:
+        log(f"❌ exploded on follow-up for {iid}: {repr(e)}")
+        raise
 
 # === Message Filter ===
 def is_message_allowed(message: discord.Message) -> bool:
