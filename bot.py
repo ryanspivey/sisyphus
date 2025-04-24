@@ -61,7 +61,10 @@ async def on_ready():
 @bot.tree.command(name="play", description="Play a song in your voice channel")
 @app_commands.describe(search="The song name or URL to play")
 async def play(interaction: discord.Interaction, search: str):
-    await interaction.response.defer()
+    try:
+        await interaction.response.defer(thinking=True)
+    except discord.NotFound:
+        return   # bail out, another container already answered
 
     # Step 1: Make sure the user is in a voice channel
     if not interaction.user.voice or not interaction.user.voice.channel:
