@@ -67,7 +67,7 @@ def log(*msg):
 @bot.tree.command(name="play", description="Play a song in your voice channel")
 @app_commands.describe(search="The song name or URL to play")
 async def play(interaction: discord.Interaction, search: str):
-    # 1️⃣  ACKNOWLEDGE THE INTERACTION (or bail if another container won)
+    # ACKNOWLEDGE THE INTERACTION (or bail if another container won)
     try:
         # thinking=True gives Discord the “Bot is thinking…” state
         await interaction.response.defer(thinking=True)
@@ -75,7 +75,7 @@ async def play(interaction: discord.Interaction, search: str):
         # Another container already deferred this interaction.
         return
 
-    # 2️⃣  ENSURE USER IS IN A VOICE CHANNEL
+    # ENSURE USER IS IN A VOICE CHANNEL
     if not (interaction.user.voice and interaction.user.voice.channel):
         try:
             await interaction.followup.send(
@@ -85,7 +85,7 @@ async def play(interaction: discord.Interaction, search: str):
             pass          # follow-up already sent by the other container
         return
 
-    # 3️⃣  GET OR CREATE A PLAYER FOR THIS GUILD
+    # GET OR CREATE A PLAYER FOR THIS GUILD
     node: wavelink.Node = wavelink.Pool.get_node()
     existing_vc = get(bot.voice_clients, guild=interaction.guild)
 
@@ -95,7 +95,7 @@ async def play(interaction: discord.Interaction, search: str):
         channel = interaction.user.voice.channel
         player: wavelink.Player = await channel.connect(cls=wavelink.Player)
 
-    # 4️⃣  SEARCH & PLAY
+    # SEARCH & PLAY
     tracks = await wavelink.Playable.search(search)
     if not tracks:
         try:
@@ -107,7 +107,7 @@ async def play(interaction: discord.Interaction, search: str):
     track = tracks[0]
     await player.play(track)
 
-    # 5️⃣  CONFIRM TO THE USER
+    # CONFIRM TO THE USER
     try:
         await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
     except discord.NotFound:
