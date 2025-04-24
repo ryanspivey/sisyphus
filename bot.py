@@ -1,7 +1,7 @@
-import os
-import asyncio
-import threading
-import typing
+# ──────────────────────────────────────────────────────────────────────────────
+#  Sisyphus music-bot – full code, ready to run
+# ──────────────────────────────────────────────────────────────────────────────
+import os, time, random, asyncio, threading, functools
 from dotenv import load_dotenv
 from flask import Flask, request
 
@@ -9,189 +9,278 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from discord.utils import get
-import wavelink
-import functools
+import wavelink                   # 3.4.x
+
+# always-flushed print
 print = functools.partial(print, flush=True)
 
-# === Load environment variables ===
+# ╭─────────────────────  ENV & CONFIG  ─────────────────────╮
 load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_IDS_RAW = os.getenv("CHANNEL_IDS")
+TOKEN           = os.getenv("DISCORD_TOKEN")
+CHANNEL_IDS_RAW = os.getenv("CHANNEL_IDS", "")
 
-if not TOKEN:
-    print("❌ ERROR: DISCORD_TOKEN is missing.")
+CHANNEL_IDS = [int(cid.strip()) for cid in CHANNEL_IDS_RAW.split(",") if cid.strip().isdigit()]
 
-if not CHANNEL_IDS_RAW:
-    print("❌ ERROR: CHANNEL_IDS is missing.")
-    CHANNEL_IDS = []
-else:
-    try:
-        CHANNEL_IDS = [int(cid.strip()) for cid in CHANNEL_IDS_RAW.split(',')]
-    except Exception as e:
-        print(f"❌ ERROR parsing CHANNEL_IDS: {e}")
-        CHANNEL_IDS = []
-
-# === Intents and Bot Setup ===
-intents = discord.Intents.default()
+# ╭─────────────────────  DISCORD  ──────────────────────────╮
+intents               = discord.Intents.default()
 intents.message_content = True
-intents.messages = True
-intents.guilds = True
-intents.voice_states = True
+intents.messages        = True
+intents.guilds          = True
+intents.voice_states    = True
 
-bot = commands.Bot(command_prefix="/", intents=intents)
-
-# === Lavalink Setup ===
-@bot.event
-async def on_ready():
-    print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
-    try:
-        await bot.tree.sync()
-        print("✅ Slash commands synced")
-    except Exception as e:
-        print(f"❌ Failed to sync commands: {e}")
-
-    print(f"LAVALINK_PASS: {os.getenv('LAVALINK_PASS')}")
-    print(f"LAVALINK_IP: {os.getenv('LAVALINK_IP')}")
-
-    node = wavelink.Node(uri=f'http://{os.getenv("LAVALINK_IP")}:2333', password=os.getenv("LAVALINK_PASS"))
-    await wavelink.Pool.connect(client=bot, nodes=[node])
-    print("🎶 Lavalink node connected")
+bot  = commands.Bot(command_prefix="/", intents=intents)
 
 def log(*msg):
-    # helpful prefix: container-id, iso-timestamp
-    print(f"[{os.getenv('RENDER_INSTANCE_ID','local')} "
-          f"{time.strftime('%H:%M:%S')}]",
+    print(f"[{os.getenv('RENDER_INSTANCE_ID', 'local')} {time.strftime('%H:%M:%S')}]",
           *msg)
 
-# === Slash Command: /play ===
-@bot.tree.command(name="play", description="Play a song in your voice channel")
-@app_commands.describe(search="The song name or URL to play")
-async def play(interaction: discord.Interaction, search: str):
-    # ACKNOWLEDGE THE INTERACTION (or bail if another container won)
+# ╭─────────────────────  LAVALINK CONNECT  ─────────────────╮
+@bot.event
+async def on_ready():
+    log(f"Logged in as {bot.user} ({bot.user.id})")
+    # connect lavalink
+    node = wavelink.Node(
+        uri      = f"http://{os.getenv('LAVALINK_IP')}:2333",
+        password = os.getenv("LAVALINK_PASS")
+    )
+    await wavelink.Pool.connect(client=bot, nodes=[node])
+    log("Lavalink node connected")
+
     try:
-        # thinking=True gives Discord the “Bot is thinking…” state
-        await interaction.response.defer(thinking=True)
-    except discord.NotFound:
-        # Another container already deferred this interaction.
-        return
+        await bot.tree.sync()
+        log("Slash commands synced")
+    except Exception as e:
+        log("Failed to sync commands:", e)
 
-    # ENSURE USER IS IN A VOICE CHANNEL
-    if not (interaction.user.voice and interaction.user.voice.channel):
-        try:
-            await interaction.followup.send(
-                "❌ You must be in a voice channel to use this command."
-            )
-        except discord.NotFound:
-            pass          # follow-up already sent by the other container
-        return
 
-    # GET OR CREATE A PLAYER FOR THIS GUILD
-    node: wavelink.Node = wavelink.Pool.get_node()
-    existing_vc = get(bot.voice_clients, guild=interaction.guild)
+# ╭─────────────────────  MUSIC HELPERS  ────────────────────╮
+class Music:
+    """Utility helpers – works on `wavelink.Player` instances."""
 
-    if existing_vc:
-        player: wavelink.Player = existing_vc
-    else:
-        channel = interaction.user.voice.channel
-        player: wavelink.Player = await channel.connect(cls=wavelink.Player)
+    @staticmethod
+    async def ensure_player(inter: discord.Interaction) -> wavelink.Player:
+        """Get or create a voice-player bound to this guild."""
+        if not (inter.user.voice and inter.user.voice.channel):
+            raise RuntimeError("You must be in a voice channel.")
 
-    # SEARCH & PLAY
+        # connection / reuse
+        player = get(bot.voice_clients, guild=inter.guild)
+        if not player:
+            player = await inter.user.voice.channel.connect(cls=wavelink.Player)
+
+            # attach a queue & state
+            player.queue   = []
+            player.history = []
+            player.loop    = False
+            player.volume  = 100
+        return player
+
+    # simple wrappers ---------------------------------------------------------
+    @staticmethod
+    async def play(player: wavelink.Player, track: wavelink.Playable):
+        await player.play(track)
+        player.queue.insert(0, track)  # currently playing at index 0
+
+    @staticmethod
+    async def enqueue(player: wavelink.Player, track: wavelink.Playable):
+        player.queue.append(track)
+
+    @staticmethod
+    async def next_track(player: wavelink.Player):
+        if player.queue:
+            player.history.append(player.queue.pop(0))
+        if player.queue:
+            await player.play(player.queue[0])
+
+    @staticmethod
+    async def previous_track(player: wavelink.Player):
+        if player.history:
+            previous = player.history.pop()
+            player.queue.insert(0, previous)
+            await player.play(previous)
+
+# ╭─────────────────────  INTERACTIVE UI  ───────────────────╮
+class PlayCard(discord.ui.View):
+    def __init__(self, player: wavelink.Player):
+        super().__init__(timeout=None)
+        self.player = player
+
+    # ► / ❚❚
+    @discord.ui.button(emoji="⏯️", style=discord.ButtonStyle.primary, row=0)
+    async def pause_resume(self, interaction: discord.Interaction, _):
+        if self.player.paused:
+            await self.player.resume()
+        else:
+            await self.player.pause()
+        await interaction.response.defer()
+
+    # ⏭
+    @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
+    async def skip(self, interaction: discord.Interaction, _):
+        await Music.next_track(self.player)
+        await interaction.response.defer()
+
+    # ⏮
+    @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.primary, row=0)
+    async def previous(self, interaction: discord.Interaction, _):
+        await Music.previous_track(self.player)
+        await interaction.response.defer()
+
+    # 🔀 shuffle
+    @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=1)
+    async def shuffle(self, interaction: discord.Interaction, _):
+        if len(self.player.queue) > 2:
+            head = self.player.queue[0]
+            rest = self.player.queue[1:]
+            random.shuffle(rest)
+            self.player.queue = [head] + rest
+        await interaction.response.defer()
+
+    # 🔁 loop
+    @discord.ui.button(emoji="🔁", style=discord.ButtonStyle.secondary, row=1)
+    async def loop(self, interaction: discord.Interaction, _):
+        self.player.loop = not getattr(self.player, "loop", False)
+        await interaction.response.defer()
+
+    # 🔉
+    @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.success, row=0)
+    async def vol_down(self, interaction: discord.Interaction, _):
+        self.player.volume = max(10, self.player.volume - 10)
+        await self.player.set_volume(self.player.volume)
+        await interaction.response.defer()
+
+    # 🔊
+    @discord.ui.button(emoji="🔊", style=discord.ButtonStyle.success, row=0)
+    async def vol_up(self, interaction: discord.Interaction, _):
+        self.player.volume = min(150, self.player.volume + 10)
+        await self.player.set_volume(self.player.volume)
+        await interaction.response.defer()
+
+    # ⏹ stop / disconnect
+    @discord.ui.button(emoji="⏹️", style=discord.ButtonStyle.danger, row=1)
+    async def stop(self, interaction: discord.Interaction, _):
+        await self.player.stop()
+        await self.player.disconnect()
+        await interaction.response.defer()
+
+# ╭─────────────────────  SLASH COMMANDS  ───────────────────╮
+@bot.tree.command(name="play", description="Play a song (search term or URL)")
+@app_commands.describe(search="song name / link")
+async def slash_play(inter: discord.Interaction, search: str):
+    # acknowledge
+    await inter.response.defer(thinking=True)
+
+    # create / get player
+    try:
+        player = await Music.ensure_player(inter)
+    except RuntimeError as err:
+        return await inter.followup.send(f"❌ {err}")
+
+    # search
     tracks = await wavelink.Playable.search(search)
     if not tracks:
-        try:
-            await interaction.followup.send("❌ No results found.")
-        except discord.NotFound:
-            pass
-        return
+        return await inter.followup.send("❌ No results.")
 
     track = tracks[0]
-    await player.play(track)
 
-    # CONFIRM TO THE USER
-    try:
-        await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
-    except discord.NotFound:
-        # Another container already sent a response; nothing else to do.
-        pass
+    if player.is_playing():
+        await Music.enqueue(player, track)
+        await inter.followup.send(f"➕ Queued **{track.title}**")
+    else:
+        await Music.play(player, track)
+        card = PlayCard(player)
+        await inter.followup.send(f"▶️ Now playing **{track.title}**", view=card)
 
-# === Message Filter ===
-def is_message_allowed(message: discord.Message) -> bool:
-    has_attachment = bool(message.attachments)
-    has_link = any(word.startswith(("http://", "https://")) for word in message.content.split())
-    return has_attachment or has_link
+
+# simple slash wrappers mapping to the buttons -------------------------------
+@bot.tree.command(name="pause", description="Pause / resume playback")
+async def slash_pause(inter: discord.Interaction):
+    player = await Music.ensure_player(inter)
+    await inter.response.defer()
+    if player.paused:
+        await player.resume()
+    else:
+        await player.pause()
+
+
+@bot.tree.command(name="skip", description="Skip to next track")
+async def slash_skip(inter: discord.Interaction):
+    player = await Music.ensure_player(inter)
+    await inter.response.defer()
+    await Music.next_track(player)
+
+
+@bot.tree.command(name="stop", description="Stop and disconnect")
+async def slash_stop(inter: discord.Interaction):
+    player = await Music.ensure_player(inter)
+    await inter.response.defer()
+    await player.stop()
+    await player.disconnect()
+
+
+# ╭─────────────────────  AUTOPLAY / LOOP  ──────────────────╮
+@bot.listen("wavelink_track_end")
+async def _on_track_end(player: wavelink.Player, *_):
+    # if looping, replay
+    if getattr(player, "loop", False):
+        await player.play(player.queue[0])
+        return
+
+    # otherwise next in queue
+    if len(player.queue) > 1:
+        player.history.append(player.queue.pop(0))
+        await player.play(player.queue[0])
+    else:
+        # queue empty -> disconnect after a grace period
+        await asyncio.sleep(300)
+        if not player.is_playing():
+            await player.disconnect()
+
+# ╭─────────────────────  MESSAGE FILTER / PURGE / FLASK  ──╮
+def is_message_allowed(msg: discord.Message) -> bool:
+    return msg.attachments or any(word.startswith(("http://", "https://"))
+                                  for word in msg.content.split())
 
 @bot.event
-async def on_message(message):
-    if message.author.bot:
+async def on_message(msg: discord.Message):
+    if msg.author.bot or msg.channel.id not in CHANNEL_IDS:
         return
+    if not is_message_allowed(msg):
+        await msg.delete()
+        warn = await msg.channel.send(
+            f"🚫 <@{msg.author.id}>, text-only messages aren’t allowed. Include a link or file."
+        )
+        await warn.delete(delay=8)
 
-    if message.channel.id not in CHANNEL_IDS:
-        return
-
-    if not is_message_allowed(message):
-        try:
-            await message.delete()
-            warning = await message.channel.send(
-                f"🚫 <@{message.author.id}>, text-only messages aren't allowed. Include a link or file."
-            )
-            await warning.delete(delay=8)
-        except Exception as e:
-            print(f"❌ Failed to delete message or send warning: {e}")
-
-# === Purge Channel ===
-async def purge_channel(channel_id: int):
+async def purge_channel(ch_id: int):
     await bot.wait_until_ready()
-    channel = bot.get_channel(channel_id)
-    if not channel:
-        print(f"❌ Channel {channel_id} not found")
+    ch = bot.get_channel(ch_id)
+    if not ch:
         return
+    async for m in ch.history(limit=1000):
+        if not (m.author.bot or is_message_allowed(m)):
+            await m.delete()
 
-    deleted_count = 0
-    skipped_count = 0
-
-    try:
-        async for message in channel.history(limit=1000):
-            if message.author.bot:
-                skipped_count += 1
-                continue
-            if not is_message_allowed(message):
-                try:
-                    await message.delete()
-                    deleted_count += 1
-                except Exception as e:
-                    print(f"❌ Error deleting message: {e}")
-            else:
-                skipped_count += 1
-        print(f"✅ Purge complete: {deleted_count} deleted, {skipped_count} skipped.")
-    except Exception as e:
-        print(f"❌ Error purging channel: {e}")
-
-# === Keep-alive Server ===
+# small keep-alive server (unchanged) ----------------------------------------
 app = Flask(__name__)
-client_ref = None
-purge_fn = None
+client_ref = None; purge_fn = None
 
-@app.route('/')
-def home():
-    return "Bot is alive!"
+@app.route("/")
+def home(): return "Bot is alive!"
 
-@app.route('/purge/<int:channel_id>')
-def purge_text_channel(channel_id: int):
-    fut = asyncio.run_coroutine_threadsafe(
-        purge_fn(channel_id), client_ref.loop
-    )
-    return f"Purge started for {channel_id}", 200
+@app.route("/purge/<int:cid>")
+def purge_ep(cid: int):
+    fut = asyncio.run_coroutine_threadsafe(purge_fn(cid), client_ref.loop)
+    return f"Purge started for {cid}", 200
 
-def start_flask():
-    app.run(host="0.0.0.0", port=8080)
+def _flask(): app.run(host="0.0.0.0", port=8080)
 
-def keep_alive(bot_client, purge_coroutine):
+def keep_alive(client, purge_coroutine):
     global client_ref, purge_fn
-    client_ref = bot_client
-    purge_fn = purge_coroutine
-    threading.Thread(target=start_flask, daemon=True).start()
+    client_ref, purge_fn = client, purge_coroutine
+    threading.Thread(target=_flask, daemon=True).start()
 
-# === Start Bot ===
+# ╭─────────────────────  START  ────────────────────────────╮
 keep_alive(bot, purge_channel)
-print("🚀 Starting bot...")
+log("Starting bot…")
 bot.run(TOKEN)
