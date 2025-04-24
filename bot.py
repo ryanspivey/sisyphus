@@ -11,7 +11,6 @@ from discord import app_commands
 from discord.utils import get
 import wavelink
 import functools
-import time
 print = functools.partial(print, flush=True)
 
 # === Load environment variables ===
@@ -58,34 +57,62 @@ async def on_ready():
     await wavelink.Pool.connect(client=bot, nodes=[node])
     print("🎶 Lavalink node connected")
 
-# === Slash Command: /play ===
 def log(*msg):
     # helpful prefix: container-id, iso-timestamp
     print(f"[{os.getenv('RENDER_INSTANCE_ID','local')} "
           f"{time.strftime('%H:%M:%S')}]",
           *msg)
 
+# === Slash Command: /play ===
 @bot.tree.command(name="play", description="Play a song in your voice channel")
 @app_commands.describe(search="The song name or URL to play")
 async def play(interaction: discord.Interaction, search: str):
-    iid = interaction.id  # snowflake of this slash-command
-    log(f"received /play {iid}")
-
+    # 1️⃣  ACKNOWLEDGE THE INTERACTION (or bail if another container won)
     try:
+        # thinking=True gives Discord the “Bot is thinking…” state
         await interaction.response.defer(thinking=True)
-        log(f"deferred {iid}")
     except discord.NotFound:
-        log(f"duplicate-container lost the race for {iid}; exiting")
+        # Another container already deferred this interaction.
         return
 
+    # 2️⃣  ENSURE USER IS IN A VOICE CHANNEL
+    if not (interaction.user.voice and interaction.user.voice.channel):
+        try:
+            await interaction.followup.send(
+                "❌ You must be in a voice channel to use this command."
+            )
+        except discord.NotFound:
+            pass          # follow-up already sent by the other container
+        return
+
+    # 3️⃣  GET OR CREATE A PLAYER FOR THIS GUILD
+    node: wavelink.Node = wavelink.Pool.get_node()
+    existing_vc = get(bot.voice_clients, guild=interaction.guild)
+
+    if existing_vc:
+        player: wavelink.Player = existing_vc
+    else:
+        channel = interaction.user.voice.channel
+        player: wavelink.Player = await channel.connect(cls=wavelink.Player)
+
+    # 4️⃣  SEARCH & PLAY
+    tracks = await wavelink.Playable.search(search)
+    if not tracks:
+        try:
+            await interaction.followup.send("❌ No results found.")
+        except discord.NotFound:
+            pass
+        return
+
+    track = tracks[0]
+    await player.play(track)
+
+    # 5️⃣  CONFIRM TO THE USER
     try:
-        # … rest of your logic, unchanged …
-        # sprinkle a few log() calls if you like
-        await interaction.followup.send(f"▶️ Now playing **{track.title}**")
-        log(f"followup sent {iid}")
-    except Exception as e:
-        log(f"❌ exploded on follow-up for {iid}: {repr(e)}")
-        raise
+        await interaction.followup.send(f"▶️ Now playing: **{track.title}**")
+    except discord.NotFound:
+        # Another container already sent a response; nothing else to do.
+        pass
 
 # === Message Filter ===
 def is_message_allowed(message: discord.Message) -> bool:
