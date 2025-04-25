@@ -110,8 +110,29 @@ class Music:
         previous = player.history.pop()
         # push the current song back to the front of the queue
         if player.current:
-            await player.queue.put(player.current, index=0)
+            await player.queue.put(player.current, 0)
         await player.play(previous)
+
+    @staticmethod
+    async def announce_now_playing(player: wavelink.Player,
+                                   interaction: discord.Interaction | None):
+        """Send a fresh ‘Now playing…’ message with a new PlayCard."""
+        track = player.current
+        if not track:
+            return
+
+        title  = getattr(track, "title", "Unknown title")
+        author = getattr(track, "author", "Unknown artist")
+        content = f"▶️ **Now playing:** *{title}* — {author}"
+        view    = PlayCard(player)
+
+        if interaction is not None:
+            await interaction.followup.send(content, view=view)
+        else:
+            text_ch = next((c for c in player.guild.text_channels
+                            if c.permissions_for(player.guild.me).send_messages), None)
+            if text_ch:
+                await text_ch.send(content, view=view)
 
 
 # ───────────────────────  interactive card  ───────────────
@@ -133,12 +154,14 @@ class PlayCard(discord.ui.View):
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
     async def _skip(self, inter: discord.Interaction, _):
         await Music.next_track(self.player)
+        await await Music.announce_now_playing(self.player, interaction)
         await inter.response.defer()
 
     # previous
     @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.primary, row=0)
     async def _previous(self, inter: discord.Interaction, _):
         await Music.previous_track(self.player)
+        await await Music.announce_now_playing(self.player, interaction)
         await inter.response.defer()
 
     # shuffle
@@ -240,6 +263,7 @@ async def slash_skip(inter: discord.Interaction):
     player = await Music.ensure_player(inter)
     await inter.response.defer()
     await Music.next_track(player)
+    await Music.announce_now_playing(player, interaction)
 
 
 @bot.tree.command(name="stop", description="Stop & disconnect")
@@ -255,16 +279,16 @@ async def slash_stop(inter: discord.Interaction):
 async def _on_track_end(player: wavelink.Player, *_):
     # loop?
     if getattr(player, "loop", False):
-        await player.play(player.current)
+        await player.play(player.queue[0])
+        await await Music.announce_now_playing(player, None)
         return
 
-    # next in queue
-    if not player.queue.is_empty:
-        next_up = player.queue.get()
-        player.history.append(player.current)
-        await player.play(next_up)
+    if len(player.queue) > 1:
+        player.history.append(player.queue.pop(0))
+        await player.play(player.queue[0])
+        await _await Music.announce_now_playing(player, None)
     else:
-        # nothing left – disconnect after 5 min idle
+        # queue empty – disconnect after 5 min idle
         await asyncio.sleep(300)
         if not player.playing:
             await player.disconnect()
