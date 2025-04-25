@@ -224,38 +224,49 @@ class PlayCard(discord.ui.View):
 @bot.tree.command(name="play", description="Play a track or playlist")
 @app_commands.describe(search="song / playlist link or search term")
 async def slash_play(inter: discord.Interaction, search: str):
+    # acknowledge right away
     await inter.response.defer(thinking=True)
 
+    # make sure we have a Player in the user’s VC
     try:
         player = await Music.ensure_player(inter)
     except RuntimeError as err:
         return await inter.followup.send(f"❌ {err}")
 
+    # search via Lavalink / wavelink
     result = await wavelink.Playable.search(search)
 
-    # ── Nothing found
-    if not result:
+    if not result:                         # nothing found at all
         return await inter.followup.send("❌ No results.")
 
-    # ── Result is a Playlist object
+    # ── PLAYLIST ───────────────────────────────────────────────
     if isinstance(result, wavelink.Playlist):
         playlist: wavelink.Playlist = result
         tracks = playlist.tracks
 
-        # If nothing is playing, start with the first track
-        if not player.playing:
+        if not player.playing:             # start playing immediately
             first, *rest = tracks
             await Music.play(player, first)
             if rest:
                 await Music.bulk_enqueue(player, rest)
-            msg = f"▶️ Playing **{first.title}** from playlist **{playlist.name}** " \
-                  f"(`{len(tracks)}` tracks)"
-        else:
+            await Music.announce_now_playing(player, inter)
+        else:                              # just enqueue everything
             await Music.bulk_enqueue(player, tracks)
-            msg = f"➕ Queued playlist **{playlist.name}** (`{len(tracks)}` tracks)"
+            await inter.followup.send(
+                f"➕ Queued playlist **{playlist.name}** "
+                f"(`{len(tracks)}` tracks)"
+            )
+        return                             # all done
 
-        card = PlayCard(player)
-        return await inter.followup.send(msg, view=card)
+    # ── SINGLE TRACK / SEARCH RESULT ──────────────────────────
+    track: wavelink.Playable = result[0]
+
+    if player.playing:                     # currently something on – queue it
+        await player.queue.put(track)
+        await inter.followup.send(f"➕ Queued **{track.title}**")
+    else:                                  # nothing playing – start now
+        await Music.play(player, track)
+        await Music.announce_now_playing(player, inter)
 
     # ── Result is a normal search list (tracks[0] is first playable)
     track: wavelink.Playable = result[0]
