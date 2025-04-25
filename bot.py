@@ -114,25 +114,46 @@ class Music:
         await player.play(previous)
 
     @staticmethod
-    async def announce_now_playing(player: wavelink.Player,
-                                   interaction: discord.Interaction | None):
-        """Send a fresh ‘Now playing…’ message with a new PlayCard."""
-        track = player.current
+    async def announce_now_playing(
+        player: wavelink.Player,
+        interaction: discord.Interaction | None,
+    ):
+        """Post a fresh ‘Now playing…’ card, coping with expired tokens."""
+
+        # which track is actually playing?
+        track = player.current or (player.queue[0] if player.queue else None)
         if not track:
             return
 
-        title  = getattr(track, "title", "Unknown title")
-        author = getattr(track, "author", "Unknown artist")
-        content = f"▶️ **Now playing:** *{title}* — {author}"
-        view    = PlayCard(player)
+        content = (
+            f"▶️ **Now playing:** *{getattr(track, 'title', 'Unknown title')}*"
+            f" — {getattr(track, 'author', 'Unknown artist')}"
+        )
+        view = PlayCard(player)
 
+        # ── 1) we were invoked from a slash / button interaction ────────────
         if interaction is not None:
-            await interaction.followup.send(content, view=view)
-        else:
-            text_ch = next((c for c in player.guild.text_channels
-                            if c.permissions_for(player.guild.me).send_messages), None)
-            if text_ch:
-                await text_ch.send(content, view=view)
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(content, view=view)
+                else:
+                    await interaction.response.send_message(content, view=view)
+                return                              # posted successfully
+            except discord.NotFound:
+                # the token has expired – fall through to channel fallback
+                pass
+
+        # ── 2) fallback: first text-channel we can talk in ───────────────────
+        text_ch = next(
+            (
+                ch
+                for ch in player.guild.text_channels
+                if ch.permissions_for(player.guild.me).send_messages
+            ),
+            None,
+        )
+        if text_ch:
+            await text_ch.send(content, view=view)
 
 
 # ───────────────────────  interactive card  ───────────────
