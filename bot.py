@@ -72,7 +72,7 @@ class Music:
             player.queue   = []
             player.history = []
             player.loop    = False
-            player.volume  = 100
+            await player.set_volume(100)
         return player
 
     # simple wrappers ---------------------------------------------------------
