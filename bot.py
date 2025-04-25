@@ -85,7 +85,7 @@ class Music:
     @staticmethod
     async def enqueue(player: wavelink.Player, track: wavelink.Playable):
         """Add a track to the end of the queue."""
-        await player.queue.put(track)
+        player.queue.put(track)
 
     @staticmethod
     async def next_track(player: wavelink.Player):
@@ -116,12 +116,12 @@ class PlayCard(discord.ui.View):
 
     # pause / resume
     @discord.ui.button(emoji="⏯️", style=discord.ButtonStyle.primary, row=0)
-    async def _pause_resume(self, inter: discord.Interaction, _):
+    async def _pause_resume(self, interaction: discord.Interaction, _):
         if self.player.paused:
-            await self.player.resume()
+            await self.player.pause(False)
         else:
-            await self.player.pause()
-        await inter.response.defer()
+            await self.player.pause(True)
+        await interaction.response.defer()
 
     # skip
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
@@ -203,9 +203,9 @@ async def slash_pause(inter: discord.Interaction):
     player = await Music.ensure_player(inter)
     await inter.response.defer()
     if player.paused:
-        await player.resume()
+        await player.pause(False)
     else:
-        await player.pause()
+        await player.pause(True)
 
 
 @bot.tree.command(name="skip", description="Skip track")
