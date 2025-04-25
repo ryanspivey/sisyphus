@@ -154,14 +154,14 @@ class PlayCard(discord.ui.View):
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
     async def _skip(self, inter: discord.Interaction, _):
         await Music.next_track(self.player)
-        await await Music.announce_now_playing(self.player, interaction)
+        await Music.announce_now_playing(self.player, interaction)
         await inter.response.defer()
 
     # previous
     @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.primary, row=0)
     async def _previous(self, inter: discord.Interaction, _):
         await Music.previous_track(self.player)
-        await await Music.announce_now_playing(self.player, interaction)
+        await Music.announce_now_playing(self.player, interaction)
         await inter.response.defer()
 
     # shuffle
