@@ -78,7 +78,7 @@ class Music:
 
     # ── queue / playback helpers ───────────────────────────
     @staticmethod
-    async def play_now(player: wavelink.Player, track: wavelink.Playable):
+    async def play(player: wavelink.Player, track: wavelink.Playable):
         """Start playing a track immediately (does **not** touch the queue)."""
         await player.play(track)
 
