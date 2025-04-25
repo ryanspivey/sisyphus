@@ -280,7 +280,7 @@ async def _on_track_end(player: wavelink.Player, *_):
     # loop?
     if getattr(player, "loop", False):
         await player.play(player.queue[0])
-        await await Music.announce_now_playing(player, None)
+        await Music.announce_now_playing(player, None)
         return
 
     if len(player.queue) > 1:
