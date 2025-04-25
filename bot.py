@@ -286,7 +286,7 @@ async def _on_track_end(player: wavelink.Player, *_):
     if len(player.queue) > 1:
         player.history.append(player.queue.pop(0))
         await player.play(player.queue[0])
-        await _await Music.announce_now_playing(player, None)
+        await Music.announce_now_playing(player, None)
     else:
         # queue empty – disconnect after 5 min idle
         await asyncio.sleep(300)
