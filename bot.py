@@ -154,14 +154,14 @@ class PlayCard(discord.ui.View):
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
     async def _skip(self, inter: discord.Interaction, _):
         await Music.next_track(self.player)
-        await Music.announce_now_playing(self.player, interaction)
+        await Music.announce_now_playing(self.player, inter)
         await inter.response.defer()
 
     # previous
     @discord.ui.button(emoji="⏮️", style=discord.ButtonStyle.primary, row=0)
     async def _previous(self, inter: discord.Interaction, _):
         await Music.previous_track(self.player)
-        await Music.announce_now_playing(self.player, interaction)
+        await Music.announce_now_playing(self.player, inter)
         await inter.response.defer()
 
     # shuffle
@@ -263,7 +263,7 @@ async def slash_skip(inter: discord.Interaction):
     player = await Music.ensure_player(inter)
     await inter.response.defer()
     await Music.next_track(player)
-    await Music.announce_now_playing(player, interaction)
+    await Music.announce_now_playing(player, inter)
 
 
 @bot.tree.command(name="stop", description="Stop & disconnect")
