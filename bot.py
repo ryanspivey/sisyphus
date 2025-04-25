@@ -183,7 +183,7 @@ async def slash_play(inter: discord.Interaction, search: str):
 
     track = tracks[0]
 
-    if player.is_playing():
+    if player.playing:
         await Music.enqueue(player, track)
         await inter.followup.send(f"➕ Queued **{track.title}**")
     else:
@@ -233,7 +233,7 @@ async def _on_track_end(player: wavelink.Player, *_):
     else:
         # queue empty -> disconnect after a grace period
         await asyncio.sleep(300)
-        if not player.is_playing():
+        if not player.playing:
             await player.disconnect()
 
 # ╭─────────────────────  MESSAGE FILTER / PURGE / FLASK  ──╮
