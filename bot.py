@@ -59,20 +59,21 @@ class Music:
 
     @staticmethod
     async def ensure_player(inter: discord.Interaction) -> wavelink.Player:
-        """Get or create a voice-player bound to this guild."""
+        """Get–or–create the voice Player for this guild."""
         if not (inter.user.voice and inter.user.voice.channel):
             raise RuntimeError("You must be in a voice channel.")
 
-        # connection / reuse
+        # reuse an existing Player if it’s already connected
         player = get(bot.voice_clients, guild=inter.guild)
         if not player:
             player = await inter.user.voice.channel.connect(cls=wavelink.Player)
 
-            # attach a queue & state
-            player.queue   = []
-            player.history = []
+            # initialise state ── don’t replace the queue object!
+            player.queue.clear()          # (it’s a wavelink.Queue)
+            player.history = []           # keep our own history list
             player.loop    = False
             await player.set_volume(100)
+
         return player
 
     # simple wrappers ---------------------------------------------------------
